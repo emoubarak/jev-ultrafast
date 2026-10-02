@@ -16,8 +16,9 @@ def decision_endpoint():
     """(url, key, default model, wrapped). DECISION_PROVIDER=cloudflare swaps TypeSafe Jev for Cloudflare Clef."""
     if os.environ.get("DECISION_PROVIDER") == "cloudflare":
         account = os.environ["CLOUDFLARE_ACCOUNT_ID"]
-        url = f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/cloudflare/clef"
-        return url, os.environ["CLOUDFLARE_API_TOKEN"], "clef-flash", True
+        model = os.environ.get("TYPESAFE_MODEL", "clef-flash")  # "clef" or "clef-flash"; one endpoint each
+        url = f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/cloudflare/{model}"
+        return url, os.environ["CLOUDFLARE_API_TOKEN"], model, True
     return "https://api.typesafe.ai/v1/systemone", os.environ["TYPESAFE_API_KEY"], "jev-latest", False
 
 
@@ -126,9 +127,15 @@ def choose(state, goal, history):
         "questions": questions,
     }
     started = time.perf_counter()
+    solo = {}
+    if wrapped:  # Clef rejects a choice with fewer than 2 options: a lone candidate is decided locally
+        for name in [n for n, q in questions.items() if n != "operation" and len(q["criteria"]) < 2]:
+            only = next(iter(questions.pop(name)["criteria"]))
+            solo[name] = {"type": "choice", "choice": only, "probabilities": {only: 1.0}, "confidence": 1.0}
     result = post_json(url, key, body)
     if wrapped:  # Cloudflare wraps the answer in {"result": ..., "success": ...}
         result = result["result"]
+        result["answers"].update(solo)
     operation_answer = validate_choice(result["answers"].get("operation", {}), operations)
     operation = operation_answer["choice"]
     target = None
