@@ -12,6 +12,15 @@ from .questions import NEXT_ACTION, TARGET, TEXT_VALUE
 CLIENT = httpx.Client(http2=True, timeout=25)
 
 
+def decision_endpoint():
+    """(url, key, default model, wrapped). DECISION_PROVIDER=cloudflare swaps TypeSafe Jev for Cloudflare Clef."""
+    if os.environ.get("DECISION_PROVIDER") == "cloudflare":
+        account = os.environ["CLOUDFLARE_ACCOUNT_ID"]
+        url = f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/cloudflare/clef"
+        return url, os.environ["CLOUDFLARE_API_TOKEN"], "clef-flash", True
+    return "https://api.typesafe.ai/v1/systemone", os.environ["TYPESAFE_API_KEY"], "jev-latest", False
+
+
 def post_json(url, key, body):
     for attempt in range(3):
         try:
@@ -104,8 +113,9 @@ def choose(state, goal, history):
             },
             "instructions": {"goal": goal, "operation": operation, "rules": [NEXT_ACTION, TARGET]},
         }
+    url, key, default_model, wrapped = decision_endpoint()
     body = {
-        "model": os.environ.get("TYPESAFE_MODEL", "jev-latest"),
+        "model": os.environ.get("TYPESAFE_MODEL", default_model),
         "state": {
             "page": {k: state[k] for k in ("url", "title", "text")},
             "elements": elements,
@@ -116,7 +126,9 @@ def choose(state, goal, history):
         "questions": questions,
     }
     started = time.perf_counter()
-    result = post_json("https://api.typesafe.ai/v1/systemone", os.environ["TYPESAFE_API_KEY"], body)
+    result = post_json(url, key, body)
+    if wrapped:  # Cloudflare wraps the answer in {"result": ..., "success": ...}
+        result = result["result"]
     operation_answer = validate_choice(result["answers"].get("operation", {}), operations)
     operation = operation_answer["choice"]
     target = None
