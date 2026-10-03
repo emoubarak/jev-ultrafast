@@ -57,6 +57,8 @@
     if (!safe(e) || !visible(e) || e.matches(':disabled') || e.closest('[aria-disabled="true"]')) continue;
     const r=e.getBoundingClientRect(), x=r.x+r.width/2, y=r.y+r.height/2, rname=role(e);
     if (!rname || r.width<=0 || r.height<=0 || x<0 || y<0 || x>=innerWidth || y>=innerHeight) continue;
+    // The executor refuses a target that is not on top at its centre (a collapsed panel, a modal): never offer one.
+    if (!e.contains(document.elementFromPoint(x,y))) continue;
     if (rname==='gridcell' && e.querySelector('button,[role="button"]')) continue;
     const base={node:identity(e),role:rname,label:name(e)||rname,
       rect:{x:r.x,y:r.y,w:r.width,h:r.height}};
@@ -78,6 +80,24 @@
       actions.push({...base,kind:editable?'fill':'click',value});
       if (editable) actions.push({...base,kind:'click',value,label:'Open '+base.label});
     }
+  }
+  const offered=new Set(actions.map(a=>cache.nodes.get(a.node))), pointer=new Set();
+  const pointing=e=>e && e!==document.body && getComputedStyle(e).cursor==='pointer';
+  const texts=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+  let walked=0, tnode;
+  while ((tnode=texts.nextNode()) && walked++<5000) {   // bounded: one computed style per text node at most
+    const parent=tnode.parentElement;
+    if (!tnode.textContent.trim() || !parent || parent.closest(selector) || !pointing(parent)) continue;
+    let root=parent;
+    while (pointing(root.parentElement)) root=root.parentElement;   // cursor is inherited: climb to the clickable
+    if (pointer.has(root) || offered.has(root) || root.querySelector(selector)) continue;
+    const label=(root.innerText||'').trim().replace(/\s+/g,' ');
+    if (!label || label.length>80 || !visible(root)) continue;
+    const r=root.getBoundingClientRect(), x=r.x+r.width/2, y=r.y+r.height/2;
+    if (r.width<=0 || r.height<=0 || x<0 || y<0 || x>=innerWidth || y>=innerHeight) continue;
+    if (!root.contains(document.elementFromPoint(x,y))) continue;
+    pointer.add(root);
+    actions.push({node:identity(root),role:'button',label,rect:{x:r.x,y:r.y,w:r.width,h:r.height},kind:'click',value:''});
   }
   const words=[], walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
   const range=document.createRange(); let node,length=0;
