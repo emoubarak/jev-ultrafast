@@ -318,3 +318,27 @@ def test_navigation_during_prediction_reobserves_without_action(runner):
     assert runner.state["status"] == "ready"
     assert runner.state["decision"] is None
     runner.state["browser"].act.assert_not_called()
+
+
+def test_fill_freshness_checks_the_field_not_the_whole_page(monkeypatch):
+    import jev_ultrafast.browser as browser
+
+    b = browser.Browser.__new__(browser.Browser)
+    p = {**page(), "page_key": ["k"], "guards": {"7": ["field"]}}
+    seen = []
+
+    def evaluate(expression):
+        seen.append(expression)
+        return [["k"], ["field"]]   # the field and its form are unchanged; a banner elsewhere ticked
+
+    b.evaluate = evaluate
+    assert b.fresh(p, {"kind": "fill", "node": 7})
+    assert "c.guard(c.nodes.get(7))" in seen[0]
+
+
+def test_fill_passes_its_action_to_the_freshness_check(runner, monkeypatch):
+    monkeypatch.setattr(loop, "field_text", lambda context: ("102000", {"model": "m", "latency_ms": 1}))
+    runner.state["page"]["actions"][0]["kind"] = "fill"
+    runner.command("act", {"fingerprint": runner.state["page"]["fingerprint"]})
+    action = runner.state["page"]["actions"][0]
+    assert any(c.args[1:] == (action,) for c in runner.state["browser"].fresh.call_args_list)

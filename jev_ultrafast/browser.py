@@ -86,7 +86,9 @@ class Browser:
         raise StalePage("Page did not settle")
 
     def fresh(self, page, action=None):
-        if action is not None and action["kind"] in {"click", "select"}:
+        # An input checks its own element and scope, not the whole page: a rotating banner elsewhere must not make
+        # every decision stale forever.
+        if action is not None and action["kind"] in {"click", "select", "fill"}:
             node = action["node"]
             if type(node) is not int:
                 return False
