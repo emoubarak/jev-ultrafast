@@ -342,3 +342,17 @@ def test_fill_passes_its_action_to_the_freshness_check(runner, monkeypatch):
     runner.command("act", {"fingerprint": runner.state["page"]["fingerprint"]})
     action = runner.state["page"]["actions"][0]
     assert any(c.args[1:] == (action,) for c in runner.state["browser"].fresh.call_args_list)
+
+
+def test_a_verdict_ignores_free_text_but_not_controls():
+    import jev_ultrafast.browser as browser
+
+    b = browser.Browser.__new__(browser.Browser)
+    marker = [1, "u", 0, 0, 800, 600, "t", "Pub 1", [{"id": "e1"}], []]
+    p = {"marker": marker}
+    b.evaluate = lambda expression: [1, "u", 0, 0, 800, 600, "t", "Pub 2", [{"id": "e1"}], []]
+    assert b.settled(p)
+    b.evaluate = lambda expression: [1, "u", 0, 0, 800, 600, "t", "Pub 2", [{"id": "e2"}], []]
+    assert not b.settled(p)
+    b.evaluate = lambda expression: None
+    assert not b.settled(p)

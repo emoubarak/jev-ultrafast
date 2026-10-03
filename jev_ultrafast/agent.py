@@ -91,7 +91,7 @@ class Agent:
             state["decision"] = None
             selected = decision["choice"]
             if selected in {"DONE", "BLOCKED"}:
-                if not state["browser"].fresh(page):
+                if not state["browser"].settled(page):
                     state["status"] = "ready"
                     raise StalePage("Page changed since the decision. Choose again.")
                 state["status"] = "done" if selected == "DONE" else "blocked"

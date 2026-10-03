@@ -99,6 +99,12 @@ class Browser:
             return current == [page["page_key"], page["guards"].get(str(node))]
         return self.evaluate(MARKER) == page["marker"]
 
+    def settled(self, page):
+        """For DONE / BLOCKED: the page is the one decided on, its free text aside (marker index 7). Controls, values,
+        URL, title and scroll must match; a live region (rotating banner, clock) must not refuse every verdict."""
+        current = self.evaluate(MARKER)
+        return isinstance(current, list) and current[:7] + current[8:] == page["marker"][:7] + page["marker"][8:]
+
     def act(self, action, page, text=None):
         if not self.fresh(page, action):
             raise StalePage("Page changed since this decision. Observe again.")
